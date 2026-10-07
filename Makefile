@@ -1,4 +1,4 @@
-.PHONY: dev backend frontend install clean
+.PHONY: dev backend frontend install clean test
 
 dev:
 	@trap 'kill 0' EXIT; \
@@ -11,6 +11,9 @@ backend:
 
 frontend:
 	cd frontend && npm run dev
+
+test:
+	python hindsight/manage.py test retros --verbosity=2
 
 install:
 	pip install -r hindsight/requirements.txt

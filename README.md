@@ -29,6 +29,10 @@ hindsight/
 
 `make install`
 
+# Test
+
+`make test`
+
 # Running in Dev
 
 `make dev`
