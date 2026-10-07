@@ -8,6 +8,7 @@ function App() {
   const [teamInput, setTeamInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [connectedUsers, setConnectedUsers] = useState([]);
 
   const [columns, setColumns] = useState([
     { id: 'start', title: 'Start', items: [] },
@@ -23,7 +24,8 @@ function App() {
     if (!teamId) return;
 
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${wsProtocol}//127.0.0.1:8000/ws/retro/${teamId}/`;
+    const encodedUser = encodeURIComponent(user || 'Anonymous');
+    const wsUrl = `${wsProtocol}//127.0.0.1:8000/ws/retro/${teamId}/?username=${encodedUser}`;
     
     socketRef.current = new WebSocket(wsUrl);
 
@@ -42,6 +44,8 @@ function App() {
             return { ...col, items: [...col.items, data.item] };
           })
         );
+      } else if (data.type === 'presence_update') {
+        setConnectedUsers(data.users || []);
       }
     };
 
@@ -148,8 +152,22 @@ function App() {
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight">Hindsight</h1>
         </div>
-        <div className="text-xs bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-full text-slate-300">
-          <span className="font-semibold text-white">{user}</span> from Team <span className="font-semibold text-white">{team}</span>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <div className="flex -space-x-2 mr-1">
+              {connectedUsers.map((u, i) => (
+                <div key={i} className="w-7 h-7 rounded-full bg-indigo-500 border-2 border-slate-900 flex items-center justify-center text-xs font-bold ring-1 ring-indigo-500/30 shadow-sm" title={u}>
+                  {u.charAt(0).toUpperCase()}
+                </div>
+              ))}
+            </div>
+            {connectedUsers.length > 0 && (
+              <span className="text-[10px] uppercase font-semibold tracking-wider text-slate-400">{connectedUsers.length} online</span>
+            )}
+          </div>
+          <div className="text-xs bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-full text-slate-300">
+            <span className="font-semibold text-white">{user}</span> from Team <span className="font-semibold text-white">{team}</span>
+          </div>
         </div>
       </header>
       <main className="grid grid-cols-1 md:grid-cols-3 gap-6">
