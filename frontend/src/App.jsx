@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 
+const MAX_VOTES = 3;
+
 function App() {
   const [user, setUser] = useState(null);
   const [team, setTeam] = useState(null);
@@ -11,24 +13,25 @@ function App() {
   const [connectedUsers, setConnectedUsers] = useState([]);
   const [stage, setStage] = useState('setup');
   const [facilitator, setFacilitator] = useState(null);
+  const [votesUsed, setVotesUsed] = useState(0);
+  const [myVotes, setMyVotes] = useState({});
 
   const [columns, setColumns] = useState([
     { id: 'start', title: 'Start', items: [] },
     { id: 'stop', title: 'Stop', items: [] },
     { id: 'continue', title: 'Continue', items: [] }
   ]);
-  
+
   const [newItemText, setNewItemText] = useState({ start: '', stop: '', continue: '' });
   const socketRef = useRef(null);
 
-  // Establish WebSocket connection once user and team are established
   useEffect(() => {
     if (!teamId) return;
 
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const encodedUser = encodeURIComponent(user || 'Anonymous');
     const wsUrl = `${wsProtocol}//127.0.0.1:8000/ws/retro/${teamId}/?username=${encodedUser}`;
-    
+
     socketRef.current = new WebSocket(wsUrl);
 
     socketRef.current.onopen = () => {
@@ -50,6 +53,15 @@ function App() {
         setConnectedUsers(data.users || []);
       } else if (data.type === 'stage_updated') {
         setStage(data.stage);
+      } else if (data.type === 'vote_updated') {
+        setColumns((prevCols) =>
+          prevCols.map((col) => ({
+            ...col,
+            items: col.items.map((item) =>
+              item.id === data.item_id ? { ...item, vote_count: data.vote_count } : item
+            )
+          }))
+        );
       }
     };
 
@@ -91,6 +103,8 @@ function App() {
       setTeamId(data.team_id || data.team_name.toLowerCase().replace(/\s+/g, '-'));
       setStage(data.stage || 'setup');
       setFacilitator(data.facilitator || null);
+      setVotesUsed(data.used_votes || 0);
+      setMyVotes(data.my_votes || {});
     } catch (err) {
       console.warn('API connection failed, falling back to local mock session:', err);
       setUser(nameInput.trim());
@@ -102,7 +116,7 @@ function App() {
   };
 
   const handleAddItem = (columnId) => {
-    if (stage === 'grouping') return;
+    if (stage !== 'entry') return;
     const text = newItemText[columnId];
     if (!text || !text.trim()) return;
 
@@ -113,7 +127,6 @@ function App() {
       author: user,
     };
 
-    // Optimistic update so the sender sees the item immediately
     const optimisticItem = { text: text.trim(), author: user };
     setColumns((prevCols) =>
       prevCols.map((col) =>
@@ -135,6 +148,40 @@ function App() {
         type: 'change_stage',
         stage: newStage
       }));
+    }
+  };
+
+  const handleAddVote = (itemId) => {
+    if (votesUsed >= MAX_VOTES) return;
+    setVotesUsed((v) => v + 1);
+    setMyVotes((mv) => ({ ...mv, [itemId]: (mv[itemId] || 0) + 1 }));
+    setColumns((prevCols) =>
+      prevCols.map((col) => ({
+        ...col,
+        items: col.items.map((item) =>
+          item.id === itemId ? { ...item, vote_count: (item.vote_count || 0) + 1 } : item
+        )
+      }))
+    );
+    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify({ type: 'add_vote', item_id: itemId }));
+    }
+  };
+
+  const handleRemoveVote = (itemId) => {
+    if (!myVotes[itemId]) return;
+    setVotesUsed((v) => v - 1);
+    setMyVotes((mv) => ({ ...mv, [itemId]: mv[itemId] - 1 }));
+    setColumns((prevCols) =>
+      prevCols.map((col) => ({
+        ...col,
+        items: col.items.map((item) =>
+          item.id === itemId ? { ...item, vote_count: Math.max(0, (item.vote_count || 0) - 1) } : item
+        )
+      }))
+    );
+    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify({ type: 'remove_vote', item_id: itemId }));
     }
   };
 
@@ -186,8 +233,13 @@ function App() {
             <div className="text-xs bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-full text-slate-300">
               Stage: <span className="font-semibold text-white uppercase">{stage}</span>
             </div>
+            {stage === 'voting' && (
+              <div className="text-xs bg-amber-900/50 border border-amber-500/50 px-3 py-1.5 rounded-full text-amber-200">
+                Votes: <span className="font-semibold">{MAX_VOTES - votesUsed}</span>/{MAX_VOTES} remaining
+              </div>
+            )}
             {user === facilitator && (
-              <select 
+              <select
                 value={stage}
                 onChange={(e) => handleStageChange(e.target.value)}
                 className="bg-slate-800 text-xs border border-slate-700 rounded-lg px-2 py-1 text-slate-100"
@@ -215,16 +267,36 @@ function App() {
             <h2 className="text-sm font-bold uppercase tracking-wider mb-4 text-indigo-400 border-b border-slate-700 pb-2">{col.title}</h2>
             <div className="flex-1 space-y-3 mb-4">
               {col.items.map((item, index) => (
-                <div key={index} className="bg-slate-700 p-3 rounded-lg text-sm shadow border border-slate-600 flex flex-col">
+                <div key={index} className="bg-slate-700 p-3 rounded-lg text-sm shadow border border-slate-600 flex flex-col gap-2">
                   <span>{typeof item === 'string' ? item : item.text}</span>
-                  {item.author && <span className="text-[10px] text-slate-400 mt-1 self-end">@{item.author}</span>}
+                  <div className="flex items-center justify-between mt-1">
+                    {item.author && <span className="text-[10px] text-slate-400">@{item.author}</span>}
+                    {stage === 'voting' && item.id && (
+                      <div className="flex items-center gap-1 ml-auto">
+                        <button
+                          onClick={() => handleRemoveVote(item.id)}
+                          disabled={!myVotes[item.id]}
+                          className="w-6 h-6 rounded bg-slate-600 hover:bg-slate-500 text-slate-200 flex items-center justify-center text-xs disabled:opacity-30"
+                        >−</button>
+                        <span className="text-xs font-semibold text-white min-w-[24px] text-center">
+                          {item.vote_count || 0}
+                          {myVotes[item.id] ? <span className="text-amber-400 ml-0.5">({myVotes[item.id]})</span> : null}
+                        </span>
+                        <button
+                          onClick={() => handleAddVote(item.id)}
+                          disabled={votesUsed >= MAX_VOTES}
+                          className="w-6 h-6 rounded bg-indigo-600 hover:bg-indigo-500 text-white flex items-center justify-center text-xs disabled:opacity-30"
+                        >+</button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               ))}
               {col.items.length === 0 && (
                 <p className="text-xs text-slate-500 text-center py-4 italic">No items yet.</p>
               )}
             </div>
-            {stage !== 'grouping' && (
+            {stage === 'entry' && (
               <div className="space-y-2 mt-auto">
                 <input
                   type="text"
