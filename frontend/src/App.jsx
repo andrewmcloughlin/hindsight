@@ -9,6 +9,8 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [connectedUsers, setConnectedUsers] = useState([]);
+  const [stage, setStage] = useState('setup');
+  const [facilitator, setFacilitator] = useState(null);
 
   const [columns, setColumns] = useState([
     { id: 'start', title: 'Start', items: [] },
@@ -46,6 +48,8 @@ function App() {
         );
       } else if (data.type === 'presence_update') {
         setConnectedUsers(data.users || []);
+      } else if (data.type === 'stage_updated') {
+        setStage(data.stage);
       }
     };
 
@@ -85,6 +89,8 @@ function App() {
       setUser(data.username);
       setTeam(data.team_name);
       setTeamId(data.team_id || data.team_name.toLowerCase().replace(/\s+/g, '-'));
+      setStage(data.stage || 'setup');
+      setFacilitator(data.facilitator || null);
     } catch (err) {
       console.warn('API connection failed, falling back to local mock session:', err);
       setUser(nameInput.trim());
@@ -119,6 +125,16 @@ function App() {
     }
 
     setNewItemText({ ...newItemText, [columnId]: '' });
+  };
+
+  const handleStageChange = (newStage) => {
+    setStage(newStage);
+    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify({
+        type: 'change_stage',
+        stage: newStage
+      }));
+    }
   };
 
   if (!user || !team) {
@@ -165,8 +181,30 @@ function App() {
               <span className="text-[10px] uppercase font-semibold tracking-wider text-slate-400">{connectedUsers.length} online</span>
             )}
           </div>
-          <div className="text-xs bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-full text-slate-300">
-            <span className="font-semibold text-white">{user}</span> from Team <span className="font-semibold text-white">{team}</span>
+          <div className="flex items-center gap-2">
+            <div className="text-xs bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-full text-slate-300">
+              Stage: <span className="font-semibold text-white uppercase">{stage}</span>
+            </div>
+            {user === facilitator && (
+              <select 
+                value={stage}
+                onChange={(e) => handleStageChange(e.target.value)}
+                className="bg-slate-800 text-xs border border-slate-700 rounded-lg px-2 py-1 text-slate-100"
+              >
+                <option value="setup">Setup</option>
+                <option value="entry">Entry</option>
+                <option value="grouping">Grouping</option>
+                <option value="voting">Voting</option>
+                <option value="discuss">Discuss</option>
+                <option value="closed">Closed</option>
+              </select>
+            )}
+            <div className="text-xs bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-full text-slate-300">
+              Facilitator: <span className="font-semibold text-indigo-400">{facilitator || 'None'}</span>
+            </div>
+            <div className="text-xs bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-full text-slate-300">
+              <span className="font-semibold text-white">{user}</span> from Team <span className="font-semibold text-white">{team}</span>
+            </div>
           </div>
         </div>
       </header>

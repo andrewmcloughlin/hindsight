@@ -1,23 +1,29 @@
-.PHONY: dev backend frontend install clean test
+.PHONY: dev backend frontend install clean test down manage shell
 
 dev:
-	@trap 'kill 0' EXIT; \
-	$(MAKE) backend & \
-	$(MAKE) frontend & \
-	wait
+	docker compose up --build
+
+down:
+	docker compose down
+
+manage:
+	docker compose exec backend python hindsight/manage.py $(cmd)
+
+shell:
+	docker compose exec backend bash
 
 backend:
-	python hindsight/manage.py runserver
+	docker compose up backend
 
 frontend:
-	cd frontend && npm run dev
+	docker compose up frontend
 
 test:
-	python hindsight/manage.py test retros --verbosity=2
+	docker compose run --rm backend python hindsight/manage.py test retros --verbosity=2
 
 install:
-	pip install -r hindsight/requirements.txt
-	cd frontend && npm install
+	docker compose run --rm backend pip install -r hindsight/requirements.txt
+	docker compose run --rm frontend npm install
 
 clean:
 	find . -type f -name "*.pyc" -delete
