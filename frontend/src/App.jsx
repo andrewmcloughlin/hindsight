@@ -102,6 +102,7 @@ function App() {
   };
 
   const handleAddItem = (columnId) => {
+    if (stage === 'grouping') return;
     const text = newItemText[columnId];
     if (!text || !text.trim()) return;
 
@@ -223,22 +224,24 @@ function App() {
                 <p className="text-xs text-slate-500 text-center py-4 italic">No items yet.</p>
               )}
             </div>
-            <div className="space-y-2 mt-auto">
-              <input
-                type="text"
-                placeholder="Type a thought..."
-                value={newItemText[col.id]}
-                onChange={(e) => setNewItemText({ ...newItemText, [col.id]: e.target.value })}
-                onKeyDown={(e) => e.key === 'Enter' && handleAddItem(col.id)}
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-indigo-500"
-              />
-              <button
-                onClick={() => handleAddItem(col.id)}
-                className="w-full bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-200 border border-indigo-500/30 font-medium py-1.5 px-3 rounded-lg transition-colors text-xs"
-              >
-                + Add item
-              </button>
-            </div>
+            {stage !== 'grouping' && (
+              <div className="space-y-2 mt-auto">
+                <input
+                  type="text"
+                  placeholder="Type a thought..."
+                  value={newItemText[col.id]}
+                  onChange={(e) => setNewItemText({ ...newItemText, [col.id]: e.target.value })}
+                  onKeyDown={(e) => e.key === 'Enter' && handleAddItem(col.id)}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-indigo-500"
+                />
+                <button
+                  onClick={() => handleAddItem(col.id)}
+                  className="w-full bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-200 border border-indigo-500/30 font-medium py-1.5 px-3 rounded-lg transition-colors text-xs"
+                >
+                  + Add item
+                </button>
+              </div>
+            )}
           </div>
         ))}
       </main>
