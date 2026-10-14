@@ -15,6 +15,7 @@ function App() {
   const [facilitator, setFacilitator] = useState(null);
   const [votesUsed, setVotesUsed] = useState(0);
   const [myVotes, setMyVotes] = useState({});
+  const [teamVotesRemaining, setTeamVotesRemaining] = useState({});
 
   const [columns, setColumns] = useState([
     { id: 'start', title: 'Start', items: [] },
@@ -44,8 +45,17 @@ function App() {
         setColumns((prevCols) =>
           prevCols.map((col) => {
             if (col.id !== data.column) return col;
-            const alreadyExists = col.items.some((i) => i.id && i.id === data.item.id);
-            if (alreadyExists) return col;
+            // Already has this real item (e.g. received twice)
+            if (col.items.some((i) => i.id && i.id === data.item.id)) return col;
+            // Replace the matching optimistic item (no id, same author + text) with the confirmed one
+            const optimisticIndex = col.items.findIndex(
+              (i) => !i.id && i.author === data.item.author && i.text === data.item.text
+            );
+            if (optimisticIndex !== -1) {
+              const updated = [...col.items];
+              updated[optimisticIndex] = data.item;
+              return { ...col, items: updated };
+            }
             return { ...col, items: [...col.items, data.item] };
           })
         );
@@ -62,6 +72,11 @@ function App() {
             )
           }))
         );
+      } else if (data.type === 'votes_remaining_update') {
+        setTeamVotesRemaining(prev => ({
+          ...prev,
+          [data.username]: data.votes_remaining
+        }));
       }
     };
 
@@ -218,10 +233,17 @@ function App() {
         </div>
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
-            <div className="flex -space-x-2 mr-1">
+            <div className="flex bg-slate-800 rounded-full border-slate-700 p-1 border">
               {connectedUsers.map((u, i) => (
-                <div key={i} className="w-7 h-7 rounded-full bg-indigo-500 border-2 border-slate-900 flex items-center justify-center text-xs font-bold ring-1 ring-indigo-500/30 shadow-sm" title={u}>
-                  {u.charAt(0).toUpperCase()}
+                <div key={i} className="flex items-center space-x-1 px-2 border-r border-slate-700 last:border-none" title={u}>
+                  <div className="w-5 h-5 rounded-full bg-indigo-500 flex items-center justify-center text-[10px] font-bold text-white uppercase shadow-sm">
+                    {u.charAt(0)}
+                  </div>
+                  {stage === 'voting' && (
+                    <span className="text-[10px] font-bold text-amber-200">
+                      {teamVotesRemaining[u] !== undefined ? teamVotesRemaining[u] : MAX_VOTES}v
+                    </span>
+                  )}
                 </div>
               ))}
             </div>
